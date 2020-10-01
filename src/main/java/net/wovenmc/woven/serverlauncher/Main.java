@@ -1,13 +1,42 @@
-package net.wovenmc.serverlauncher;
+/*
+ * Copyright (c) 2020 WovenMC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-import net.wovenmc.serverlauncher.jimfs.Handler;
-import net.wovenmc.serverlauncher.jimfs.ShimJimfsFileSystemProvider;
+package net.wovenmc.woven.serverlauncher;
 
-import java.io.*;
+import net.wovenmc.woven.serverlauncher.jimfs.Handler;
+import net.wovenmc.woven.serverlauncher.jimfs.ShimJimfsFileSystemProvider;
+
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.net.*;
-import java.nio.file.*;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.net.URLConnection;
+import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
@@ -21,11 +50,13 @@ public class Main {
 
 	public static void main(String[] args) {
 		Properties launcherProps = new Properties();
+
 		// Read properties from own JAR
 		try (InputStream is = Main.class.getClassLoader().getResourceAsStream("woven-server-launcher.properties")) {
 			if (is == null) {
 				throw new FileNotFoundException("woven-server-launcher.properties");
 			}
+
 			launcherProps.load(is);
 		} catch (IOException e) {
 			System.err.println("Failed to load woven-server-launcher bundled properties:");
@@ -33,9 +64,11 @@ public class Main {
 			System.err.println("The launcher jar is corrupt, please redownload it!");
 			System.exit(1);
 		}
+
 		// Properties can be overridden; woven-server-launcher takes priority over fabric-server-launcher
 		Path wovenPropPath = Paths.get("woven-server-launcher.properties");
 		Path fabricPropPath = Paths.get("fabric-server-launcher.properties");
+
 		if (Files.exists(wovenPropPath)) {
 			try (BufferedReader br = Files.newBufferedReader(wovenPropPath)) {
 				launcherProps.load(br);
@@ -48,6 +81,7 @@ public class Main {
 			}
 		} else if (Files.exists(fabricPropPath)) {
 			String origServerPath = launcherProps.getProperty("serverJar", DEF_SERVER_JAR_PATH);
+
 			// Try to read from fabric-server-launcher, and copy serverJar into woven-server-launcher to preserve it
 			try (BufferedReader br = Files.newBufferedReader(fabricPropPath)) {
 				launcherProps.load(br);
@@ -58,6 +92,7 @@ public class Main {
 				e.printStackTrace();
 				System.exit(1);
 			}
+
 			if (!origServerPath.equals(launcherProps.getProperty("serverJar", origServerPath))) {
 				try (BufferedWriter bw = Files.newBufferedWriter(wovenPropPath)) {
 					Properties overrideProps = new Properties();
@@ -73,6 +108,7 @@ public class Main {
 
 		String mainClass = launcherProps.getProperty("launch.mainClass");
 		URL serverJarUrl = null;
+
 		try {
 			serverJarUrl = new URI(launcherProps.getProperty("serverJarUrl")).toURL();
 		} catch (MalformedURLException | URISyntaxException e) {
@@ -80,17 +116,19 @@ public class Main {
 			e.printStackTrace();
 			System.exit(1);
 		}
+
 		byte[] serverJarHash = hexToBytes(launcherProps.getProperty("serverJarHash"));
 		// Should work backwards-compatible with fabric-server-launcher
 		Path serverJar = Paths.get(launcherProps.getProperty("serverJar", DEF_SERVER_JAR_PATH));
 
 		boolean valid = false;
+
 		try {
 			verifyMinecraftJar(serverJar, serverJarHash);
 			valid = true;
 		} catch (InvalidHashException e) {
 			System.out.println("Minecraft jar has invalid hash (expected " + e.expectedHash + ", found " + e.hashFound
-				+ ") attempting to download...");
+					+ ") attempting to download...");
 		} catch (NoSuchFileException e) {
 			System.out.println("Downloading Minecraft jar...");
 		} catch (IOException e) {
@@ -107,11 +145,12 @@ public class Main {
 					break;
 				} catch (InvalidHashException e) {
 					System.err.println("Downloaded Minecraft jar has invalid hash (expected " + e.expectedHash + ", found "
-						+ e.hashFound + ")");
+							+ e.hashFound + ")");
 				} catch (IOException e) {
 					System.err.println("Download failed!");
 					e.printStackTrace();
 				}
+
 				if (i < MAX_DOWNLOAD_TRIES - 1) {
 					System.out.println("Retrying... (" + (i + 1) + "/" + (MAX_DOWNLOAD_TRIES - 1) + ")");
 				}
@@ -130,6 +169,7 @@ public class Main {
 		System.setProperty("fabric.gameJarPath", serverJar.toAbsolutePath().toString());
 
 		URL serverJarFileUrl = null;
+
 		try {
 			serverJarFileUrl = serverJar.toUri().toURL();
 		} catch (MalformedURLException e) {
@@ -141,8 +181,8 @@ public class Main {
 		// Set the parent classloader to the parent of the AppClassLoader
 		// This will be ExtClassLoader on Java 8 or older, PlatformClassLoader on Java 9 or newer - ensures extension classes will work
 		URLClassLoader gameLoader = new URLClassLoader(new URL[] {
-			serverJarFileUrl,
-			Main.class.getProtectionDomain().getCodeSource().getLocation()
+				serverJarFileUrl,
+				Main.class.getProtectionDomain().getCodeSource().getLocation()
 		}, ClassLoader.getSystemClassLoader().getParent());
 
 		// Register the jimfs URL handler shim and FileSystemProvider shim
@@ -150,6 +190,7 @@ public class Main {
 		ShimJimfsFileSystemProvider.initialize(gameLoader);
 
 		Thread.currentThread().setContextClassLoader(gameLoader);
+
 		try {
 			Class<?> clazz = gameLoader.loadClass(mainClass);
 			Method main = clazz.getMethod("main", String[].class);
@@ -169,7 +210,7 @@ public class Main {
 		public final String expectedHash;
 		public final String hashFound;
 
-		public InvalidHashException(String expectedHash, String hashFound) {
+		InvalidHashException(String expectedHash, String hashFound) {
 			this.expectedHash = expectedHash;
 			this.hashFound = hashFound;
 		}
@@ -177,13 +218,16 @@ public class Main {
 
 	private static void verifyMinecraftJar(Path serverJar, byte[] serverJarHash) throws IOException {
 		MessageDigest digest;
+
 		try {
 			digest = MessageDigest.getInstance("SHA-1");
 		} catch (NoSuchAlgorithmException e) {
 			throw new RuntimeException("Failed to verify Minecraft server JAR", e);
 		}
+
 		// TODO: change to a stream?
 		byte[] foundHash = digest.digest(Files.readAllBytes(serverJar));
+
 		if (!Arrays.equals(foundHash, serverJarHash)) {
 			throw new InvalidHashException(bytesToHex(serverJarHash), bytesToHex(foundHash));
 		}
@@ -208,11 +252,13 @@ public class Main {
 
 	public static String bytesToHex(byte[] bytes) {
 		char[] hexChars = new char[bytes.length * 2];
+
 		for (int j = 0; j < bytes.length; j++) {
 			int v = bytes[j] & 0xFF;
 			hexChars[j * 2] = HEX_ARRAY[v >>> 4];
 			hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F];
 		}
+
 		return new String(hexChars);
 	}
 
@@ -220,11 +266,12 @@ public class Main {
 		int len = s.length();
 		if (len % 2 != 0) throw new RuntimeException("Invalid hash " + s);
 		byte[] data = new byte[len / 2];
+
 		for (int i = 0; i < len; i += 2) {
 			data[i / 2] = (byte) ((Character.digit(s.charAt(i), 16) << 4)
 				+ Character.digit(s.charAt(i+1), 16));
 		}
+
 		return data;
 	}
-
 }

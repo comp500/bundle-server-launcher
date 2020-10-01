@@ -1,1 +1,1 @@
-net.wovenmc.serverlauncher.jimfs.ShimJimfsFileSystemProvider
+net.wovenmc.woven.serverlauncher.jimfs.ShimJimfsFileSystemProvider

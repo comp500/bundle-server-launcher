@@ -149,34 +149,18 @@
 		<module name="PackageDeclaration"/>
 		<module name="PackageName">
 			<!-- require a package following the following structure:
-			base package name: net.wovenmc.woven
-			+ api/implementation/mixin subpackage: api/impl/mixin
-			+ client/dedicated server/common env subpackage: client/server/<nothing>
-			+ module name subpackage, singular, may contain multiple .-separated parts
+			base package name: net.wovenmc.woven.serverlauncher
 			+ other subpackages as needed, all singular
-
 			The regex works as follows:
 			It matches (=succeeds) for one of these cases:
-			- net.wovenmc.woven.api.client.<module-name>[.<extra packages...>]
-			- net.wovenmc.woven.api.server.<module-name>[.<extra packages...>]
-			- net.wovenmc.woven.api.<module-name>[.<extra packages...>]
-			- net.wovenmc.woven.(impl|mixin).client.<module-name>[.<extra packages...>]
-			- net.wovenmc.woven.(impl|mixin).server.<module-name>[.<extra packages...>]
-			- net.wovenmc.woven.(impl|mixin).<module-name>[.<extra packages...>]
-			where <module-name> is a set of '.'-separated words, all in singular and not starting with client. or server.
-			and <version> is a positive integer (1, 2, 3, ...)
+			- net.wovenmc.woven.serverlauncher[.<extra packages...>]
 			and <extra packages...> is a set of '.'-separated words with all the first potentially containing digits.
-			Negative lookahead ensures that client/server can't be replaced with common disguised as the module name.
-
 			The regex is implemented in 3 parts:
-			- the net.wovenmc.woven. prefix
-			- patterns for
-				- api packages: api + <not common> + client/server/nothing + <module-name>
-				- impl+mixin packages : impl/mixin + <not common> + client/server/nothing + <module-name>
+			- the net.wovenmc.woven.gradle prefix
 			- largely unconstrained trailing subpackages
 			-->
 			<property name="format"
-			value="^net\.wovenmc\.woven\.(api(?!\.common\.)(\.client|\.server|)(\.(?!client\.|server\.)[a-z]+)+|(impl|mixin|test)(?!\.common\.)(\.client|\.server|)(\.(?!client\.|server\.)[a-z]+)+)(|\.[a-z]+(\.[a-z0-9]+)*)$"/>
+					  value="^net\.wovenmc\.woven\.serverlauncher(|\.[a-z]+(\.[a-z0-9]+)*)$"/>
 		</module>
 
 		<!--<module name="InvalidJavadocPosition"/>-->
