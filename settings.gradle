@@ -10,4 +10,4 @@ pluginManagement {
 	}
 }
 
-rootProject.name = "woven_module_template"
+rootProject.name = "woven_server_launcher"

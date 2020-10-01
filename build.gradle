@@ -1,6 +1,20 @@
+import com.google.gson.*
+
+import java.util.jar.JarFile
+import java.util.zip.ZipEntry
+
+buildscript {
+	repositories {
+		mavenCentral()
+	}
+	dependencies {
+		classpath "com.google.code.gson:gson:2.8.0"
+	}
+}
+
 plugins {
-	id 'fabric-loom' version '0.5.25'
-	id 'java-library'
+	id 'com.github.johnrengelman.shadow' version '6.0.0'
+	id 'java'
 	id 'checkstyle'
 	id 'maven-publish'
 	id 'net.minecrell.licenser' version '0.4.1'
@@ -10,28 +24,75 @@ archivesBaseName = project.module_namespace
 version = project.module_version
 group = project.maven_group
 
-// Add the testmod source set.
-sourceSets {
-	testmod {
-		compileClasspath += main.compileClasspath
-		runtimeClasspath += main.runtimeClasspath
+repositories {
+	mavenCentral()
+	jcenter()
+	maven {
+		name = 'Fabric'
+		url = 'https://maven.fabricmc.net/'
 	}
 }
 
-minecraft {
+configurations {
+	loader
+	loaderDeps
+	runtimeOnly {
+		extendsFrom(loader)
+		extendsFrom(loaderDeps)
+	}
+}
+
+project.sourceSets.all { sourceSet ->
+	sourceSet.runtimeClasspath += configurations.loader
+	sourceSet.runtimeClasspath += configurations.loaderDeps
+}
+
+def resolveFabricInstallerJson() {
+	for (File file : configurations.getByName("loader").resolve()) {
+		JsonObject jsonData = new JarFile(file).withCloseable { jarFile ->
+			ZipEntry entry = jarFile.getEntry("fabric-installer.json")
+			if (entry == null) {
+				null
+			} else {
+				jarFile.getInputStream(entry).withCloseable { inputStream ->
+					JsonObject jsonData = (new Gson()).fromJson(new InputStreamReader(inputStream), JsonObject.class)
+					return jsonData
+				}
+			}
+		}
+		if (jsonData != null) {
+			return jsonData
+		}
+	}
+	return null
 }
 
 dependencies {
-	// Minecraft dependencies
-	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-	mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-	// Mod loader
-	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	// Mod loader and mappings (Minecraft is downloaded at runtime)
+	loader("net.fabricmc:fabric-loader:${project.loader_version}") {
+		transitive(false)
+	}
+	runtimeOnly "net.fabricmc:intermediary:${project.minecraft_version}"
 
-	api 'org.jetbrains:annotations:17.0.0'
-
-	// Test mod related
-	testmodImplementation project(':')
+	afterEvaluate {
+		// Look for fabric-installer.json, extract dependencies from it
+		JsonObject jsonData = resolveFabricInstallerJson()
+		if (jsonData == null) {
+			throw new RuntimeException("Error resolving Fabric loader dependencies")
+		}
+		JsonObject libraries = jsonData.get("libraries").getAsJsonObject()
+		for (side in ["common", "server"]) {
+			libraries.get(side).getAsJsonArray().each { el ->
+				String name = el.getAsJsonObject().get("name").getAsString()
+				// Exclude guava as we don't need it (it's in the server jar)
+				if (!name.contains("com.google.guava:guava")) {
+					loaderDeps(name) {
+						transitive(false)
+					}
+				}
+			}
+		}
+	}
 }
 
 java {
@@ -39,63 +100,104 @@ java {
 	targetCompatibility = JavaVersion.VERSION_1_8
 
 	withSourcesJar()
-	withJavadocJar()
 }
 
 jar {
 	from 'LICENSE'
+	
+	manifest {
+		attributes (
+			"Main-Class": "net.wovenmc.serverlauncher.Main",
+			"Implementation-Version": project.version
+		)
+	}
+
+	// The program that builds the final jar should provide this - the normal (non-fatjar) woven-server-launcher
+	// artifact is version-agnostic.
+	exclude "woven-server-launcher.properties"
+}
+
+shadowJar {
+	mergeServiceFiles {
+		// woven-server-launcher FileSystemProvider should overwrite jimfs
+		exclude "META-INF/services/java.nio.file.spi.FileSystemProvider"
+	}
+}
+
+build.dependsOn shadowJar
+
+task run(type: JavaExec) {
+	doFirst {
+		mkdir "run"
+	}
+
+	// We have to run the shadowJar, otherwise the FileSystemProvider service file isn't overwritten
+	// and manually removing it would be annoying
+	classpath = files(tasks.shadowJar)
+	workingDir = file("run")
 }
 
 tasks.withType(JavaCompile) {
 	options.encoding = 'UTF-8'
 }
 
-processResources {
-	inputs.property 'namespace', project.module_namespace
-	inputs.property 'description', project.module_description
-	inputs.property 'version', project.module_version
+ext.genOutputDir = file("$buildDir/generated-resources")
 
-	from(sourceSets.main.resources.srcDirs) {
-		include 'fabric.mod.json'
-		def properties = [
-				namespace  : project.module_namespace,
-				description: project.module_description,
-				version    : project.module_version
-		]
-		expand properties
-	}
-
-	from(sourceSets.main.resources.srcDirs) {
-		exclude 'fabric.mod.json'
+sourceSets {
+	main {
+		resources {
+			srcDirs += [genOutputDir]
+		}
 	}
 }
 
-javadoc {
-	options {
-		source = '8'
-		encoding = 'UTF-8'
-		charSet = 'UTF-8'
-		memberLevel = JavadocMemberLevel.PACKAGE
-		links(
-				'https://guava.dev/releases/21.0/api/docs/',
-				'https://asm.ow2.io/javadoc/',
-				'https://docs.oracle.com/javase/8/docs/api/',
-				'http://jenkins.liteloader.com/job/Mixin/javadoc/',
-				'https://logging.apache.org/log4j/2.x/log4j-api/apidocs/'
-				// Need to add minecraft jd publication etc once there is one available
-		)
-		// Disable the crazy super-strict doclint tool in Java 8
-		addStringOption('Xdoclint:none', '-quiet')
+static JsonElement getJson(URL url) {
+	URLConnection conn = url.openConnection()
+	conn.setRequestProperty("Accept", "application/json")
+	conn.getInputStream().withCloseable {
+		new InputStreamReader(it).withReader {
+			new JsonParser().parse(it)
+		}
 	}
-
-	classpath = sourceSets.main.compileClasspath
-	include('**/api/**')
-	failOnError false
 }
 
-runClient {
-	classpath(sourceSets.testmod.runtimeClasspath)
+task generateLauncherProperties(type: WriteProperties) {
+	outputFile file("$genOutputDir/woven-server-launcher.properties")
+
+	// Look for fabric-installer.json, extract main class from it
+	JsonObject jsonData = resolveFabricInstallerJson()
+	if (jsonData == null) {
+		throw new RuntimeException("Error resolving Fabric loader dependencies")
+	}
+	String mainClass = jsonData.get("mainClass").getAsJsonObject().get("server").getAsString()
+
+	inputs.property "mainClass", mainClass
+	inputs.property "gameVersion", project.minecraft_version
+
+	property("launch.mainClass", mainClass)
+
+	doFirst {
+		JsonObject manifestData = getJson(new URL("https://launchermeta.mojang.com/mc/game/version_manifest.json")).asJsonObject
+		JsonArray versions = manifestData.getAsJsonArray("versions")
+		boolean found = false
+		for (JsonElement version : versions) {
+			JsonObject versionObj = version.getAsJsonObject()
+			if (inputs.properties.gameVersion == versionObj.get("id").getAsString()) {
+				found = true
+				JsonObject gameVersionData = getJson(new URL(versionObj.get("url").getAsString())).asJsonObject
+				JsonObject downloadData = gameVersionData.getAsJsonObject("downloads").getAsJsonObject("server")
+				property("serverJarUrl", downloadData.get("url").getAsString())
+				property("serverJarHash", downloadData.get("sha1").getAsString())
+				break
+			}
+		}
+		if (!found) {
+			throw new RuntimeException("Failed to resolve version metadata for game version " + inputs.properties.gameVersion)
+		}
+	}
 }
+
+processResources.dependsOn generateLauncherProperties
 
 license {
 	header file('HEADER')
@@ -111,13 +213,7 @@ checkstyle {
 publishing {
 	publications {
 		mavenJava(MavenPublication) {
-			artifact(remapJar) {
-				builtBy remapJar
-			}
-			artifact(sourcesJar) {
-				builtBy remapSourcesJar
-			}
-			artifact javadocJar
+			// TODO: should we publish the shadowJar, or will it be compiled elsewhere?
 
 			pom {
 				name = project.module_namespace
