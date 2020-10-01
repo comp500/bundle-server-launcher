@@ -37,9 +37,9 @@ public final class Handler extends URLStreamHandler {
 		String existingPackages = System.getProperty("java.protocol.handler.pkgs");
 
 		if (existingPackages == null) {
-			System.setProperty("java.protocol.handler.pkgs", "net.wovenmc.serverlauncher");
+			System.setProperty("java.protocol.handler.pkgs", "net.wovenmc.woven.serverlauncher");
 		} else {
-			System.setProperty("java.protocol.handler.pkgs", existingPackages + "|net.wovenmc.serverlauncher");
+			System.setProperty("java.protocol.handler.pkgs", existingPackages + "|net.wovenmc.woven.serverlauncher");
 		}
 
 		try {
