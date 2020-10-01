@@ -1,0 +1,148 @@
+plugins {
+	id 'fabric-loom' version '0.5.25'
+	id 'java-library'
+	id 'checkstyle'
+	id 'maven-publish'
+	id 'net.minecrell.licenser' version '0.4.1'
+}
+
+archivesBaseName = project.module_namespace
+version = project.module_version
+group = project.maven_group
+
+// Add the testmod source set.
+sourceSets {
+	testmod {
+		compileClasspath += main.compileClasspath
+		runtimeClasspath += main.runtimeClasspath
+	}
+}
+
+minecraft {
+}
+
+dependencies {
+	// Minecraft dependencies
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+	// Mod loader
+	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+	api 'org.jetbrains:annotations:17.0.0'
+
+	// Test mod related
+	testmodImplementation project(':')
+}
+
+java {
+	sourceCompatibility = JavaVersion.VERSION_1_8
+	targetCompatibility = JavaVersion.VERSION_1_8
+
+	withSourcesJar()
+	withJavadocJar()
+}
+
+jar {
+	from 'LICENSE'
+}
+
+tasks.withType(JavaCompile) {
+	options.encoding = 'UTF-8'
+}
+
+processResources {
+	inputs.property 'namespace', project.module_namespace
+	inputs.property 'description', project.module_description
+	inputs.property 'version', project.module_version
+
+	from(sourceSets.main.resources.srcDirs) {
+		include 'fabric.mod.json'
+		def properties = [
+				namespace  : project.module_namespace,
+				description: project.module_description,
+				version    : project.module_version
+		]
+		expand properties
+	}
+
+	from(sourceSets.main.resources.srcDirs) {
+		exclude 'fabric.mod.json'
+	}
+}
+
+javadoc {
+	options {
+		source = '8'
+		encoding = 'UTF-8'
+		charSet = 'UTF-8'
+		memberLevel = JavadocMemberLevel.PACKAGE
+		links(
+				'https://guava.dev/releases/21.0/api/docs/',
+				'https://asm.ow2.io/javadoc/',
+				'https://docs.oracle.com/javase/8/docs/api/',
+				'http://jenkins.liteloader.com/job/Mixin/javadoc/',
+				'https://logging.apache.org/log4j/2.x/log4j-api/apidocs/'
+				// Need to add minecraft jd publication etc once there is one available
+		)
+		// Disable the crazy super-strict doclint tool in Java 8
+		addStringOption('Xdoclint:none', '-quiet')
+	}
+
+	classpath = sourceSets.main.compileClasspath
+	include('**/api/**')
+	failOnError false
+}
+
+runClient {
+	classpath(sourceSets.testmod.runtimeClasspath)
+}
+
+license {
+	header file('HEADER')
+	include '**/*.java'
+}
+
+checkstyle {
+	configFile = file("checkstyle.xml")
+	toolVersion = '8.31'
+}
+
+// Configure the Maven Publication
+publishing {
+	publications {
+		mavenJava(MavenPublication) {
+			artifact(remapJar) {
+				builtBy remapJar
+			}
+			artifact(sourcesJar) {
+				builtBy remapSourcesJar
+			}
+			artifact javadocJar
+
+			pom {
+				name = project.module_namespace
+				description = project.module_description
+			}
+
+			pom.withXml {
+				def dependenciesNode = asNode().appendNode('dependencies')
+
+				configurations.api.allDependencies.each {
+					if (it.group != null || it.name != 'unspecified') {
+						def dependencyNode = dependenciesNode.appendNode('dependency')
+
+						dependencyNode.appendNode('groupId', it.group)
+						dependencyNode.appendNode('artifactId', it.name)
+						dependencyNode.appendNode('version', it.version)
+						dependencyNode.appendNode('scope', 'compile')
+					}
+				}
+			}
+		}
+	}
+
+	repositories {
+		mavenLocal()
+		// TODO: add maven
+	}
+}

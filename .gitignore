@@ -1,0 +1,55 @@
+#
+# Woven ignore file
+#
+# v0.1
+
+# JetBrains
+.idea/
+*.iml
+*.ipr
+*.iws
+## Intellij IDEA
+out/
+## Eclipse
+eclipse
+*.launch
+.settings
+.metadata
+.classpath
+.project
+## Visual Studio
+.vs/
+
+# Build system
+## Gradle
+.gradle/
+
+# Editors
+## VSCode
+.vscode/
+
+# Logging
+logs/
+
+# Languages
+## Java
+classes/
+
+# OS
+## Windows
+desktop.ini
+
+# File types
+*.dll
+*.so
+*.dylib
+*.lib
+lib*.a
+*.png~
+
+# Common
+bin/
+build/
+dist/
+run/
+target/

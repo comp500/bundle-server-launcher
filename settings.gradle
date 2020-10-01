@@ -1,0 +1,13 @@
+pluginManagement {
+	repositories {
+		jcenter()
+		gradlePluginPortal()
+		maven {
+			name = 'Fabric'
+			url = 'https://maven.fabricmc.net/'
+		}
+		mavenLocal()
+	}
+}
+
+rootProject.name = "woven_module_template"
