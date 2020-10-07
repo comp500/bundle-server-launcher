@@ -1,6 +1,6 @@
-# Woven Server Launcher
+# Better Fabric Server Launcher
 
-Woven Server Launcher is a single-jar server bootstrapper for Fabric loader, which does not require an installer for
+Better Fabric Server Launcher (a temporary name, formerly Woven Server Launcher) is a single-jar server bootstrapper for Fabric loader, which does not require an installer for
 users to use.
 
 The `build` task (`gradlew build`) will make:
