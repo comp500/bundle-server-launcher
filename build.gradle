@@ -107,24 +107,32 @@ jar {
 	
 	manifest {
 		attributes (
-			"Main-Class": "net.wovenmc.woven.serverlauncher.Main",
+			"Main-Class": "link.infra.bundle.server.Main",
 			"Implementation-Version": project.version
 		)
 	}
 
-	// The program that builds the final jar should provide this - the normal (non-fatjar) woven-server-launcher
+	// The program that builds the final jar should provide this - the normal (non-fatjar) bundle-server-launcher
 	// artifact is version-agnostic.
-	exclude "woven-server-launcher.properties"
+	exclude "bundle-server-launcher.properties"
 }
 
 shadowJar {
 	mergeServiceFiles {
-		// woven-server-launcher FileSystemProvider should overwrite jimfs
+		// bundle-server-launcher FileSystemProvider should overwrite jimfs
 		exclude "META-INF/services/java.nio.file.spi.FileSystemProvider"
 	}
 }
 
 build.dependsOn shadowJar
+
+task renameFinalArtifact(type: Copy) {
+	from shadowJar
+	rename "bundle-server-launcher-(.*)-all\\.jar", "bundle-fabric-${project.minecraft_version}-${project.loader_version}.jar"
+	into "build/libs/"
+}
+
+build.dependsOn renameFinalArtifact
 
 task run(type: JavaExec) {
 	doFirst {
@@ -162,7 +170,7 @@ static JsonElement getJson(URL url) {
 }
 
 task generateLauncherProperties(type: WriteProperties) {
-	outputFile file("$genOutputDir/woven-server-launcher.properties")
+	outputFile file("$genOutputDir/bundle-server-launcher.properties")
 
 	// Look for fabric-installer.json, extract main class from it
 	JsonObject jsonData = resolveFabricInstallerJson()

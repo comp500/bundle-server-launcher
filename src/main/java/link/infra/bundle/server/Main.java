@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 WovenMC
+ * Copyright (c) 2020 comp500
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-package net.wovenmc.woven.serverlauncher;
+package link.infra.bundle.server;
 
-import net.wovenmc.woven.serverlauncher.jimfs.Handler;
-import net.wovenmc.woven.serverlauncher.jimfs.ShimJimfsFileSystemProvider;
+import link.infra.bundle.server.jimfs.Handler;
+import link.infra.bundle.server.jimfs.ShimJimfsFileSystemProvider;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -44,45 +44,45 @@ import java.util.Properties;
 
 public class Main {
 	private static final String VERSION = Main.class.getPackage().getImplementationVersion();
-	private static final String USER_AGENT = "woven-server-launcher/" + VERSION;
-	private static final String DEF_SERVER_JAR_PATH = ".fabric/woven-cache/server.jar";
+	private static final String USER_AGENT = "bundle-server-launcher/" + VERSION;
+	private static final String DEF_SERVER_JAR_PATH = ".fabric/bundle-cache/server.jar";
 	private static final int MAX_DOWNLOAD_TRIES = 3;
 
 	public static void main(String[] args) {
 		Properties launcherProps = new Properties();
 
 		// Read properties from own JAR
-		try (InputStream is = Main.class.getClassLoader().getResourceAsStream("woven-server-launcher.properties")) {
+		try (InputStream is = Main.class.getClassLoader().getResourceAsStream("bundle-server-launcher.properties")) {
 			if (is == null) {
-				throw new FileNotFoundException("woven-server-launcher.properties");
+				throw new FileNotFoundException("bundle-server-launcher.properties");
 			}
 
 			launcherProps.load(is);
 		} catch (IOException e) {
-			System.err.println("Failed to load woven-server-launcher bundled properties:");
+			System.err.println("Failed to load bundle-server-launcher included properties:");
 			e.printStackTrace();
 			System.err.println("The launcher jar is corrupt, please redownload it!");
 			System.exit(1);
 		}
 
-		// Properties can be overridden; woven-server-launcher takes priority over fabric-server-launcher
-		Path wovenPropPath = Paths.get("woven-server-launcher.properties");
+		// Properties can be overridden; bundle-server-launcher takes priority over fabric-server-launcher
+		Path bundlePropPath = Paths.get("bundle-server-launcher.properties");
 		Path fabricPropPath = Paths.get("fabric-server-launcher.properties");
 
-		if (Files.exists(wovenPropPath)) {
-			try (BufferedReader br = Files.newBufferedReader(wovenPropPath)) {
+		if (Files.exists(bundlePropPath)) {
+			try (BufferedReader br = Files.newBufferedReader(bundlePropPath)) {
 				launcherProps.load(br);
 			} catch (NoSuchFileException ignored) {
 				// Ignored
 			} catch (IOException e) {
-				System.err.println("Failed to read configuration file woven-server-launcher.properties:");
+				System.err.println("Failed to read configuration file bundle-server-launcher.properties:");
 				e.printStackTrace();
 				System.exit(1);
 			}
 		} else if (Files.exists(fabricPropPath)) {
 			String origServerPath = launcherProps.getProperty("serverJar", DEF_SERVER_JAR_PATH);
 
-			// Try to read from fabric-server-launcher, and copy serverJar into woven-server-launcher to preserve it
+			// Try to read from fabric-server-launcher, and copy serverJar into bundle-server-launcher to preserve it
 			try (BufferedReader br = Files.newBufferedReader(fabricPropPath)) {
 				launcherProps.load(br);
 			} catch (NoSuchFileException ignored) {
@@ -94,12 +94,12 @@ public class Main {
 			}
 
 			if (!origServerPath.equals(launcherProps.getProperty("serverJar", origServerPath))) {
-				try (BufferedWriter bw = Files.newBufferedWriter(wovenPropPath)) {
+				try (BufferedWriter bw = Files.newBufferedWriter(bundlePropPath)) {
 					Properties overrideProps = new Properties();
 					overrideProps.put("serverJar", launcherProps.getProperty("serverJar"));
-					overrideProps.store(bw, "Woven server launcher properties - Delete this file to use the default location");
+					overrideProps.store(bw, "Bundle server launcher properties - Delete this file to use the default location");
 				} catch (IOException e) {
-					System.err.println("Failed to save configuration file woven-server-launcher.properties:");
+					System.err.println("Failed to save configuration file bundle-server-launcher.properties:");
 					e.printStackTrace();
 					System.exit(1);
 				}

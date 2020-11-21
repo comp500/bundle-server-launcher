@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 WovenMC
+ * Copyright (c) 2020 comp500
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package net.wovenmc.woven.serverlauncher.jimfs;
+package link.infra.bundle.server.jimfs;
 
 import java.io.IOException;
 import java.lang.invoke.MethodHandle;
@@ -37,9 +37,9 @@ public final class Handler extends URLStreamHandler {
 		String existingPackages = System.getProperty("java.protocol.handler.pkgs");
 
 		if (existingPackages == null) {
-			System.setProperty("java.protocol.handler.pkgs", "net.wovenmc.woven.serverlauncher");
+			System.setProperty("java.protocol.handler.pkgs", "link.infra.bundle.server");
 		} else {
-			System.setProperty("java.protocol.handler.pkgs", existingPackages + "|net.wovenmc.woven.serverlauncher");
+			System.setProperty("java.protocol.handler.pkgs", existingPackages + "|link.infra.bundle.server");
 		}
 
 		try {

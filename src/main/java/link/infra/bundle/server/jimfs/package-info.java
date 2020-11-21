@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 WovenMC
+ * Copyright (c) 2020 comp500
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,4 +35,4 @@
  * This technique also avoids the "duplicate input class" issue in fabric-server-launcher, caused by having Guava in
  * both Minecraft's jar and the fabric-server-launcher jar.
  */
-package net.wovenmc.woven.serverlauncher.jimfs;
+package link.infra.bundle.server.jimfs;

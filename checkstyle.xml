@@ -149,18 +149,18 @@
 		<module name="PackageDeclaration"/>
 		<module name="PackageName">
 			<!-- require a package following the following structure:
-			base package name: net.wovenmc.woven.serverlauncher
+			base package name: link.infra.bundle.server
 			+ other subpackages as needed, all singular
 			The regex works as follows:
 			It matches (=succeeds) for one of these cases:
-			- net.wovenmc.woven.serverlauncher[.<extra packages...>]
+			- link.infra.bundle.server[.<extra packages...>]
 			and <extra packages...> is a set of '.'-separated words with all the first potentially containing digits.
 			The regex is implemented in 3 parts:
-			- the net.wovenmc.woven.gradle prefix
+			- the link.infra.bundle.server prefix
 			- largely unconstrained trailing subpackages
 			-->
 			<property name="format"
-					  value="^net\.wovenmc\.woven\.serverlauncher(|\.[a-z]+(\.[a-z0-9]+)*)$"/>
+					  value="^link\.infra\.bundle\.server(|\.[a-z]+(\.[a-z0-9]+)*)$"/>
 		</module>
 
 		<!--<module name="InvalidJavadocPosition"/>-->
