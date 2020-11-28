@@ -15,13 +15,7 @@ build:
     paths:
       - build
       - .gradle
-
-test:
-  stage: test
-  script: gradle check
-  cache:
-    key: "$CI_COMMIT_REF_NAME"
-    policy: pull
+  artifacts:
     paths:
-      - build
-      - .gradle
+      - build/libs/bundle-fabric-*.jar
+      - bundle-server-launcher-*.jar
