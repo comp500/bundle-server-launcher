@@ -1,4 +1,4 @@
-image: gradle:alpine
+image: gradle:6.6.1-jre8-hotspot
 
 variables:
   GRADLE_OPTS: "-Dorg.gradle.daemon=false"
