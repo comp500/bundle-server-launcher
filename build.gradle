@@ -2,6 +2,7 @@ import com.google.gson.*
 
 import java.util.jar.JarFile
 import java.util.zip.ZipEntry
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 buildscript {
 	repositories {
@@ -33,18 +34,29 @@ repositories {
 	}
 }
 
+// TODO: resolve versions
+project.ext.multiVersions = ["1.16.4", "1.15.2", "1.14.4", "20w51a"]
+project.ext.multiVersionsIncludesDefault = project.ext.multiVersions.remove(project.minecraft_version)
+
 configurations {
 	loader
 	loaderDeps
+	intermediaryDefault
 	runtimeOnly {
 		extendsFrom(loader)
 		extendsFrom(loaderDeps)
+		extendsFrom(intermediaryDefault)
+	}
+
+	for (String version : project.ext.multiVersions) {
+		create("intermediary$version")
 	}
 }
 
 project.sourceSets.all { sourceSet ->
 	sourceSet.runtimeClasspath += configurations.loader
 	sourceSet.runtimeClasspath += configurations.loaderDeps
+	sourceSet.runtimeClasspath += configurations.intermediaryDefault
 }
 
 def resolveFabricInstallerJson() {
@@ -72,7 +84,11 @@ dependencies {
 	loader("net.fabricmc:fabric-loader:${project.loader_version}") {
 		transitive(false)
 	}
-	runtimeOnly "net.fabricmc:intermediary:${project.minecraft_version}"
+	intermediaryDefault "net.fabricmc:intermediary:${project.minecraft_version}"
+
+	for (String version : project.ext.multiVersions) {
+		"intermediary$version" "net.fabricmc:intermediary:$version"
+	}
 
 	afterEvaluate {
 		// Look for fabric-installer.json, extract dependencies from it
@@ -98,8 +114,6 @@ dependencies {
 java {
 	sourceCompatibility = JavaVersion.VERSION_1_8
 	targetCompatibility = JavaVersion.VERSION_1_8
-
-	withSourcesJar()
 }
 
 jar {
@@ -115,9 +129,15 @@ jar {
 	// The program that builds the final jar should provide this - the normal (non-fatjar) bundle-server-launcher
 	// artifact is version-agnostic.
 	exclude "bundle-server-launcher.properties"
+
+	archiveBaseName.set("bundle-server-launcher-base")
 }
 
 shadowJar {
+	archiveBaseName.set("bundle-fabric")
+	archiveClassifier.set("")
+	archiveVersion.set("${project.minecraft_version}-${project.loader_version}")
+
 	mergeServiceFiles {
 		// bundle-server-launcher FileSystemProvider should overwrite jimfs
 		exclude "META-INF/services/java.nio.file.spi.FileSystemProvider"
@@ -125,14 +145,6 @@ shadowJar {
 }
 
 build.dependsOn shadowJar
-
-task renameFinalArtifact(type: Copy) {
-	from shadowJar
-	rename "bundle-server-launcher-(.*)-all\\.jar", "bundle-fabric-${project.minecraft_version}-${project.loader_version}.jar"
-	into "build/libs/"
-}
-
-build.dependsOn renameFinalArtifact
 
 task run(type: JavaExec) {
 	doFirst {
@@ -207,6 +219,41 @@ task generateLauncherProperties(type: WriteProperties) {
 
 processResources.dependsOn generateLauncherProperties
 
+for (String version : project.ext.multiVersions) {
+	task "shadowJar$version"(type: ShadowJar) {
+		group = "multi"
+		from sourceSets.main.output
+		configurations = [project.configurations.compile,
+						  project.configurations.loader,
+						  project.configurations.loaderDeps,
+						  project.configurations."intermediary$version"]
+
+		mergeServiceFiles {
+			archiveBaseName.set("bundle-fabric")
+			archiveClassifier.set("")
+			archiveVersion.set("$version-${project.loader_version}")
+
+			// bundle-server-launcher FileSystemProvider should overwrite jimfs
+			exclude "META-INF/services/java.nio.file.spi.FileSystemProvider"
+		}
+	}
+}
+
+task shadowJarMulti {
+	group = "multi"
+	dependsOn = project.ext.multiVersions.collect {
+		tasks."shadowJar$it"
+	}
+	if (project.ext.multiVersionsIncludesDefault) {
+		dependsOn += tasks.shadowJar
+	}
+}
+
+task buildMulti {
+	group = "multi"
+	dependsOn = [tasks.shadowJarMulti, tasks.check, tasks.jar]
+}
+
 license {
 	header file('HEADER')
 	include '**/*.java'
@@ -232,6 +279,6 @@ publishing {
 
 	repositories {
 		mavenLocal()
-		// TODO: add maven
+		// TODO: add maven?
 	}
 }
