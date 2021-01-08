@@ -111,6 +111,56 @@ dependencies {
 	}
 }
 
+ext.genOutputDir = file("$buildDir/generated-resources")
+
+static JsonElement getJson(URL url) {
+	URLConnection conn = url.openConnection()
+	conn.setRequestProperty("Accept", "application/json")
+	conn.getInputStream().withCloseable {
+		new InputStreamReader(it).withReader {
+			new JsonParser().parse(it)
+		}
+	}
+}
+
+for (v in [project.ext.multiVersions, project.ext.multiVersions].transpose() + [["Default", project.minecraft_version]]) {
+	task "generateLauncherProperties${v[0]}"(type: WriteProperties) {
+		outputFile file("$genOutputDir/$version/bundle-server-launcher.properties")
+
+		// Look for fabric-installer.json, extract main class from it
+		JsonObject jsonData = resolveFabricInstallerJson()
+		if (jsonData == null) {
+			throw new RuntimeException("Error resolving Fabric loader dependencies")
+		}
+		String mainClass = jsonData.get("mainClass").getAsJsonObject().get("server").getAsString()
+
+		inputs.property "mainClass", mainClass
+		inputs.property "gameVersion", v[1]
+
+		property("launch.mainClass", mainClass)
+
+		doFirst {
+			JsonObject manifestData = getJson(new URL("https://launchermeta.mojang.com/mc/game/version_manifest.json")).asJsonObject
+			JsonArray versions = manifestData.getAsJsonArray("versions")
+			boolean found = false
+			for (JsonElement version : versions) {
+				JsonObject versionObj = version.getAsJsonObject()
+				if (inputs.properties.gameVersion == versionObj.get("id").getAsString()) {
+					found = true
+					JsonObject gameVersionData = getJson(new URL(versionObj.get("url").getAsString())).asJsonObject
+					JsonObject downloadData = gameVersionData.getAsJsonObject("downloads").getAsJsonObject("server")
+					property("serverJarUrl", downloadData.get("url").getAsString())
+					property("serverJarHash", downloadData.get("sha1").getAsString())
+					break
+				}
+			}
+			if (!found) {
+				throw new RuntimeException("Failed to resolve version metadata for game version " + inputs.properties.gameVersion)
+			}
+		}
+	}
+}
+
 java {
 	sourceCompatibility = JavaVersion.VERSION_1_8
 	targetCompatibility = JavaVersion.VERSION_1_8
@@ -138,10 +188,15 @@ shadowJar {
 	archiveClassifier.set("")
 	archiveVersion.set("${project.minecraft_version}-${project.loader_version}")
 
+	from tasks.named("generateLauncherPropertiesDefault")
+
 	mergeServiceFiles {
 		// bundle-server-launcher FileSystemProvider should overwrite jimfs
 		exclude "META-INF/services/java.nio.file.spi.FileSystemProvider"
 	}
+
+	// Remove misleading LICENSE file
+	exclude "LICENSE.txt"
 }
 
 build.dependsOn shadowJar
@@ -161,72 +216,18 @@ tasks.withType(JavaCompile) {
 	options.encoding = 'UTF-8'
 }
 
-ext.genOutputDir = file("$buildDir/generated-resources")
-
-sourceSets {
-	main {
-		resources {
-			srcDirs += [genOutputDir]
-		}
-	}
-}
-
-static JsonElement getJson(URL url) {
-	URLConnection conn = url.openConnection()
-	conn.setRequestProperty("Accept", "application/json")
-	conn.getInputStream().withCloseable {
-		new InputStreamReader(it).withReader {
-			new JsonParser().parse(it)
-		}
-	}
-}
-
-task generateLauncherProperties(type: WriteProperties) {
-	outputFile file("$genOutputDir/bundle-server-launcher.properties")
-
-	// Look for fabric-installer.json, extract main class from it
-	JsonObject jsonData = resolveFabricInstallerJson()
-	if (jsonData == null) {
-		throw new RuntimeException("Error resolving Fabric loader dependencies")
-	}
-	String mainClass = jsonData.get("mainClass").getAsJsonObject().get("server").getAsString()
-
-	inputs.property "mainClass", mainClass
-	inputs.property "gameVersion", project.minecraft_version
-
-	property("launch.mainClass", mainClass)
-
-	doFirst {
-		JsonObject manifestData = getJson(new URL("https://launchermeta.mojang.com/mc/game/version_manifest.json")).asJsonObject
-		JsonArray versions = manifestData.getAsJsonArray("versions")
-		boolean found = false
-		for (JsonElement version : versions) {
-			JsonObject versionObj = version.getAsJsonObject()
-			if (inputs.properties.gameVersion == versionObj.get("id").getAsString()) {
-				found = true
-				JsonObject gameVersionData = getJson(new URL(versionObj.get("url").getAsString())).asJsonObject
-				JsonObject downloadData = gameVersionData.getAsJsonObject("downloads").getAsJsonObject("server")
-				property("serverJarUrl", downloadData.get("url").getAsString())
-				property("serverJarHash", downloadData.get("sha1").getAsString())
-				break
-			}
-		}
-		if (!found) {
-			throw new RuntimeException("Failed to resolve version metadata for game version " + inputs.properties.gameVersion)
-		}
-	}
-}
-
-processResources.dependsOn generateLauncherProperties
-
 for (String version : project.ext.multiVersions) {
 	task "shadowJar$version"(type: ShadowJar) {
 		group = "multi"
 		from sourceSets.main.output
+		from tasks.named("generateLauncherProperties$version")
+
 		configurations = [project.configurations.compile,
 						  project.configurations.loader,
 						  project.configurations.loaderDeps,
 						  project.configurations."intermediary$version"]
+
+		manifest.inheritFrom(tasks.jar.manifest)
 
 		mergeServiceFiles {
 			archiveBaseName.set("bundle-fabric")
@@ -236,6 +237,9 @@ for (String version : project.ext.multiVersions) {
 			// bundle-server-launcher FileSystemProvider should overwrite jimfs
 			exclude "META-INF/services/java.nio.file.spi.FileSystemProvider"
 		}
+
+		// Remove misleading LICENSE file
+		exclude "LICENSE.txt"
 	}
 }
 
