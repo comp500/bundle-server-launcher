@@ -125,7 +125,7 @@ static JsonElement getJson(URL url) {
 
 for (v in [project.ext.multiVersions, project.ext.multiVersions].transpose() + [["Default", project.minecraft_version]]) {
 	task "generateLauncherProperties${v[0]}"(type: WriteProperties) {
-		outputFile file("$genOutputDir/$version/bundle-server-launcher.properties")
+		outputFile file("$genOutputDir/${v[1]}/bundle-server-launcher.properties")
 
 		// Look for fabric-installer.json, extract main class from it
 		JsonObject jsonData = resolveFabricInstallerJson()
